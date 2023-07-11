@@ -1,5 +1,6 @@
 //a Imports
 use crate::{Char, Error, Result, StreamPosition};
+use std::cmp::min;
 
 //a Constants
 /// [BUFFER_SIZE] is the maximum number of bytes held in the UTF-8
@@ -78,6 +79,8 @@ pub struct Reader<R:std::io::Read> {
     valid_end  : usize,
     /// position in the file
     stream_pos : StreamPosition,
+    /// how many bytes to try and read into the buffer per read operation
+    chunk_size : usize,
 }
 
 //ip Reader
@@ -93,6 +96,11 @@ impl <R:std::io::Read> Reader<R> {
     /// [set_eof_on_no_data](Reader::set_eof_on_no_data) builder to
     /// modify the construction.
     pub fn new(buf_reader: R) -> Self {
+        Self::with_chunk_size(buf_reader, BUFFER_SIZE)
+    }
+
+    /// Like `new` but allows setting the chunk size
+    pub fn with_chunk_size(buf_reader: R, chunk_size: usize) -> Self {
         Self {
             buf_reader,
             eof_on_no_data : true,
@@ -102,6 +110,7 @@ impl <R:std::io::Read> Reader<R> {
             end            : 0,
             valid_end      : 0,
             stream_pos     : StreamPosition::new(),
+            chunk_size,
         }
     }
 
@@ -215,7 +224,7 @@ impl <R:std::io::Read> Reader<R> {
             self.start      = 0; // == self.start - self.start
             self.end        = n; // == self.end   - self.start
         }
-        let n = self.buf_reader.read( &mut self.current[self.end..BUFFER_SIZE] )?;
+        let n = self.buf_reader.read( &mut self.current[self.end..min(self.end + self.chunk_size, BUFFER_SIZE)] )?;
         self.end += n;
         if n==0 && self.eof_on_no_data {
             self.eof = true;
